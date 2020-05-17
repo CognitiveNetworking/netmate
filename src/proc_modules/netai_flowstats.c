@@ -80,6 +80,19 @@ typeInfo_t exportInfo[] = {
   { UINT32, "burg_cnt" },
   { UINT32, "total_fhlen"    },
   { UINT32, "total_bhlen"    },
+  /* SRI */
+  { UINT32, "toggle_fcnt" },
+  { UINT32, "toggle_bcnt" },
+  { UINT64, "min_fsteps" },
+  { UINT64, "mean_fsteps" },
+  { UINT64, "max_fsteps" },
+  { UINT64, "std_fsteps" },
+  { UINT64, "min_bsteps" },
+  { UINT64, "mean_bsteps" },
+  { UINT64, "max_bsteps" },
+  { UINT64, "std_bsteps" },
+  { UINT32, "n" }, //number of unique packet len
+  /* SRI */
   //{ UINT64, "time_s" },
   EXPORT_END 
 };
@@ -110,6 +123,11 @@ typedef enum {
   STATE_CLOSED
 } tcp_state_t;
 
+/* Step direction */
+typedef enum {
+  STEP_DOWN = 0,
+  STEP_UP
+} step_dir_t;
 
 int isSet(int bit, int test)
 {
@@ -182,10 +200,25 @@ struct flowData_t {
   /* DA: header lengths */
   uint32_t total_fhlen;
   uint32_t total_bhlen;
-
+  /* SRI */
+  step_dir_t step_dir;
+  uint32_t toggle_fcnt;
+  uint32_t toggle_bcnt;
+  uint32_t prev_len;
+  uint32_t steps;
+  uint64_t min_fsteps;
+  double steps_fsum;
+  double steps_fsqsum;
+  uint64_t max_fsteps;
+  uint64_t min_bsteps;
+  double steps_bsum;
+  double steps_bsqsum;
+  uint64_t max_bsteps;
+  int *a;
+  uint32_t n; //number of unique packet len
+  /* SRI */
   uint64_t idle_threshold;
   uint64_t min_duration;
-
   uint64_t time_cap;
 };
 
@@ -257,10 +290,22 @@ int processPacket( char *packet, metaData_t *meta, void *flowdata )
   unsigned long long now = 0;
   unsigned long long diff = 0;
   unsigned short len = 0, proto = 0;
-  
+  int flag = 0;
   // len = meta->len;
   // get the length of the IP header and data
   len = ntohs(*((unsigned short *) &meta->payload[meta->offs[L_NET] + 2]));
+  int i=0;
+  for(int i=0;i<data->n;i++)
+  {
+     if(len==data->a[i]) {
+       flag=1;
+       break;
+     }
+  }
+  if(flag==0) {
+     data->a[data->n]=len;
+     data->n++;
+  }
   
   now = meta->tv_sec*1000000ULL + meta->tv_usec;
   assert(now >= data->first);
@@ -474,7 +519,40 @@ int processPacket( char *packet, metaData_t *meta, void *flowdata )
     data->bpackets += 1;
     data->bbytes += len;
   }
-  
+  // SRI's change
+  if (len == data->prev_len) {
+      goto exit;
+  } else if((len < data->prev_len) && (data->step_dir == STEP_UP)) {
+      data->toggle_bcnt++;
+      data->step_dir = STEP_DOWN;
+      if ((data->steps < data->min_fsteps) || (data->min_fsteps == 0)) {
+          data->min_fsteps = data->steps;
+      }
+      if (data->steps > data->max_fsteps ) {
+          data->max_fsteps = data->steps;
+      }
+
+      data->steps_fsum += data->steps;
+      data->steps_fsqsum += (data->steps)*(data->steps);
+      data->steps = 0;
+  } else if((len > data->prev_len) && (data->step_dir == STEP_DOWN)) {
+      data->toggle_fcnt++;
+      data->step_dir = STEP_UP;
+      if ((data->steps < data->min_bsteps) || (data->min_bsteps == 0)) {
+          data->min_bsteps = data->steps;
+      }
+      if (data->steps > data->max_bsteps ) {
+          data->max_bsteps = data->steps;
+      }
+
+      data->steps_bsum += data->steps;
+      data->steps_bsqsum += (data->steps)*(data->steps);
+      data->steps = 0;
+  }
+
+  data->steps++;
+  data->prev_len = len;
+
   exit:
   
   if ((proto == 6) && (data->cstate == STATE_CLOSED) && (data->sstate == STATE_CLOSED)) {
@@ -503,7 +581,8 @@ int initFlowRec( configParam_t *params, void **flowdata )
   data->idle_threshold = DEF_IDLE_THRESHOLD;
   data->min_duration = DEF_MIN_DURATION;
   data->time_cap = DEF_TIME_CAP;
-  
+  data->a = malloc(100000*sizeof(int));
+  memset(data, 0, sizeof(int)); 
   while (params->name != NULL) {
     if (!strcmp(params->name, "Idle_Threshold")) {
       data->idle_threshold = atoll(params->value);
@@ -656,7 +735,6 @@ int exportData( void **exp, int *len, void *flowdata )
   if ((data->fpackets > 1) || (data->bpackets > 1)) {
     assert(data->activep > 0);
   }
-  
   ADD_UINT64( data->min_active );
   ADD_UINT64( (unsigned long long) (data->activet/data->activep) );
   ADD_UINT64( data->max_active );
@@ -685,7 +763,44 @@ int exportData( void **exp, int *len, void *flowdata )
 
   ADD_UINT32( data->total_fhlen );
   ADD_UINT32( data->total_bhlen );
-  
+  /* SRI */
+  if (data->steps > 0) {
+      if (data->step_dir == STEP_UP) {
+          if ((data->steps < data->min_fsteps) || (data->min_fsteps == 0)) {
+              data->min_fsteps = data->steps;
+          }
+          if (data->steps > data->max_fsteps ) {
+              data->max_fsteps = data->steps;
+          }
+
+          data->steps_fsum += data->steps;
+          data->steps_fsqsum += (data->steps)*(data->steps);
+      } else {
+          if ((data->steps < data->min_bsteps) || (data->min_bsteps == 0)) {
+              data->min_bsteps = data->steps;
+          }
+          if (data->steps > data->max_bsteps ) {
+              data->max_bsteps = data->steps;
+          }
+
+          data->steps_bsum += data->steps;
+          data->steps_bsqsum += (data->steps)*(data->steps);
+      }
+  }
+  ADD_UINT32( data->toggle_fcnt );
+  ADD_UINT32( data->toggle_bcnt );
+  ADD_UINT64( (data->toggle_fcnt == 0) ? 0LL : (long long) data->min_fsteps );
+  ADD_UINT64( (data->toggle_fcnt > 0) ? (unsigned long long) data->steps_fsum/data->toggle_fcnt : 0);
+  ADD_UINT64( (data->toggle_fcnt == 0) ? 0LL : (long long) data->max_fsteps );
+  ADD_UINT64( (data->toggle_fcnt < 2) ? 0LL : (unsigned long long) stddev(data->steps_fsqsum, data->steps_fsum, data->toggle_fcnt));
+  ADD_UINT64( (data->toggle_bcnt == 0) ? 0LL : (long long) data->min_bsteps );
+  ADD_UINT64( (data->toggle_bcnt > 0) ? (unsigned long long) data->steps_bsum/data->toggle_bcnt : 0);
+  ADD_UINT64( (data->toggle_bcnt == 0) ? 0LL : (long long) data->max_bsteps );
+  ADD_UINT64( (data->toggle_bcnt < 2) ? 0LL : (unsigned long long) stddev(data->steps_bsqsum, data->steps_bsum, data->toggle_bcnt));
+  ADD_UINT64( data->n );
+/*  ADD_UINT32 ( data->fsteps );   
+  ADD_UINT32 ( data->bsteps );*/
+  /* SRI */
   //ADD_UINT64( data->first );
   
   exit:

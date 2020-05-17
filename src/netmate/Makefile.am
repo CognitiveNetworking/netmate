@@ -21,7 +21,7 @@ netmate_SOURCES = Error.cc Logger.cc XMLParser.cc ConfigParser.cc ConfigManager.
        PacketQueue.cc PacketProcessor.cc CtrlComm.cc CommandLineArgs.cc FilterValue.cc \
        FilterDefParser.cc RuleFileParser.cc FlowRecordDB.cc Bitmap.cc ClassifierRFC.cc Meter.cc \
        ExportList.cc MeterInfo.cc MAPIRuleParser.cc FilterValParser.cc ParserFcts.cc \
-       Sampler.cc SamplerAll.cc Timeval.cc PageRepository.cc constants.cc \
+       Sampler.cc SamplerAll.cc SamplerNew.cc Timeval.cc PageRepository.cc constants.cc \
        Error.h Logger.h XMLParser.h ConfigParser.h ConfigManager.h PerfTimer.h \
        RuleIdSource.h Rule.h RuleManager.h Event.h EventScheduler.h ProcModule.h \
        MeterComponent.h NetTap.h NetTapPcap.h Classifier.h ClassifierSimple.h \
@@ -29,7 +29,7 @@ netmate_SOURCES = Error.cc Logger.cc XMLParser.cc ConfigParser.cc ConfigManager.
        PacketQueue.h PacketProcessor.h CtrlComm.h CommandLineArgs.h FilterValue.h \
        FilterDefParser.h RuleFileParser.h FlowRecordDB.h Bitmap.h ClassifierRFC.h Meter.h \
        ExportList.h MeterInfo.h MAPIRuleParser.h FilterValParser.h ParserFcts.h \
-       Sampler.h SamplerAll.h ClassifierRFCConf.h Timeval.h PageRepository.h Threads.h \
+       Sampler.h SamplerAll.h SamplerNew.h ClassifierRFCConf.h Timeval.h PageRepository.h Threads.h \
        FlowCreator.h FlowCreator.cc 
 
 if ENABLE_ERF

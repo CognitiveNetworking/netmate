@@ -255,7 +255,7 @@ Meter::Meter( int argc, char *argv[])
         string smpl = conf->getValue("Sampling", "CLASSIFIER");
 
         if ((smpl == "All") || (smpl.empty())) {
-            auto_ptr<Sampler> _samp(new SamplerAll());
+            auto_ptr<Sampler> _samp(new SamplerNew());
             samp = _samp;
         } else {
             throw Error("Unknown sampling algorithm '%s' specified", smpl.c_str());

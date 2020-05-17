@@ -43,6 +43,7 @@
 #include "MeterInfo.h"
 #include "Sampler.h"
 #include "SamplerAll.h"
+#include "SamplerNew.h"
 #include "constants.h"
 
 // classifier
